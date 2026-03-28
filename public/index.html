@@ -1708,7 +1708,7 @@
         EXL[row.maxEx]}</span></div></div>
       <div><div class="gl">建議做多</div><div style="margin-top:3px"><span class="tag t-long">${EXL[row.minEx]}</span></div></div>
       <div><div class="gl">年化（淨）</div><div class="gv y">${annual}%</div></div>
-      <div><div class="gl">下次結算</div><div class="gv" style="color:var(--dim);font-size:12px">${next}</div></div>
+      <div><div class="gl">下次結算</div><div style="margin-top:4px">${buildSettleTimes(row)}</div></div>
     </div>
     <div class="earn-box">
       <div class="er"><span class="ek">投入 ${
@@ -2045,7 +2045,7 @@
           ${rate !== undefined ? `<div class="${rate > 1e-4 ? 'rp' : rate < -1e-4 ? 'rn' : 'rz'}">${rate >= 0 ? '+' : ''}${(rate * 100).toFixed(4)}%</div>` : `<span class="rna2">—</span>`}
           ${lp ? `<div style="font-family:var(--mono);font-size:9px;color:var(--ac)">${fP(lp)}</div>` : ''}
         </div></td>`;}).join('')}
-      <td style="font-family:var(--mono);font-size:10px;color:var(--dim)">${bestNext(row)}</td>
+      <td style="font-family:var(--mono);font-size:10px" class="settle-td" data-sym="${row.symbol}">${bestNext(row)}</td>
     </tr>`
             ;
 
@@ -2078,6 +2078,9 @@
 
             return mainRow + expandRow;
         }).join('');
+        tbody.querySelectorAll('.settle-td').forEach(td => {
+            td.innerHTML = td.textContent;
+        });
     }
 
     function dtToggle(sym) {
@@ -2185,14 +2188,80 @@
     function sColor(ns) {
         return ns >= 0.001 ? 'var(--og)' : ns >= 0.0003 ? 'var(--yw)' : 'var(--gn)';
     }
+    // 顯示各交易所個別結算時間
+    function fmtTime(ms) {
+        if (!ms)
+            return null;
+        const dt = new Date(ms);
+        const diff = ms - Date.now();
+        const today = new Date();
+        const isToday = dt.getDate() === today.getDate() && dt.getMonth() === today.getMonth();
+        const hhmm = dt.toLocaleTimeString('zh-TW', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+        const date = dt.toLocaleDateString('zh-TW', {
+            month: '2-digit',
+            day: '2-digit'
+        });
+        const timeStr = isToday ? hhmm : (date + ' ' + hhmm);
+        if (diff <= 0)
+            return '<span style="color:var(--rd);font-size:10px">即將結算</span>';
+        if (diff < 3600000) {
+            const m = Math.floor(diff / 60000);
+            return '<span style="color:var(--yw);font-size:10px">' + m + '分後 ' + timeStr + '</span>';
+        }
+        return '<span style="color:var(--dim);font-size:10px">' + timeStr + '</span>';
+    }
+
+    function buildSettleTimes(row) {
+        const EX_NEXT = {
+            binance: 'binanceNext',
+            bybit: 'bybitNext',
+            okx: 'okxNext',
+            bitget: 'bitgetNext',
+            mexc: 'mexcNext',
+            kucoin: 'kucoinNext'
+        };
+        const lines = EX_ALL.filter(e => row[e] !== undefined && row[EX_NEXT[e]]).map(e => {
+            const t = fmtTime(row[EX_NEXT[e]]);
+            return t ? `<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">
+      <span style="font-family:var(--mono);font-size:8px;font-weight:700;color:${EXC[e]}">${EXL[e].substring(0, 3)}</span>
+      ${t}</div>` : '';
+        }).filter(Boolean);
+        if (!lines.length)
+            return '<span style="color:var(--mute);font-size:10px;font-family:var(--mono)">—</span>';
+        return lines.join('');
+    }
+
     function bestNext(row) {
-        const ts = [row.binanceNext, row.bybitNext, row.okxNext, row.mexcNext, row.kucoinNext].filter(Boolean);
+        const keys = ['binanceNext', 'bybitNext', 'okxNext', 'bitgetNext', 'mexcNext', 'kucoinNext'];
+        const ts = keys.map(k => row[k]).filter(Boolean);
         if (!ts.length)
             return '—';
-        const d = Math.min(...ts) - Date.now();
-        if (d <= 0)
-            return '即將結算';
-        return `${Math.floor(d / 3600000)}h ${Math.floor(d % 3600000 / 60000)}m`;
+        const next = Math.min(...ts);
+        const diff = next - Date.now();
+        const dt = new Date(next);
+        const hhmm = dt.toLocaleTimeString('zh-TW', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+        const date = dt.toLocaleDateString('zh-TW', {
+            month: '2-digit',
+            day: '2-digit'
+        });
+        const today = new Date();
+        const isToday = dt.getDate() === today.getDate() && dt.getMonth() === today.getMonth();
+        const timeStr = isToday ? hhmm : (date + ' ' + hhmm);
+        if (diff <= 0)
+            return '<span style="color:var(--rd);font-weight:700">即將結算</span>';
+        if (diff < 3600000) {
+            const m = Math.floor(diff / 60000);
+            return '<span style="color:var(--yw)">' + m + '分後 ' + hhmm + '</span>';
+        }
+        return timeStr;
     }
     function setSt(s, t) {
         document.getElementById('dot').className = 'dot' + (s === 'live' ? ' live' : '');
