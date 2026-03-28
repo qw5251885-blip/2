@@ -1,6 +1,12 @@
 {
   "version": 2,
   "regions": ["sin1"],
+  "crons": [
+    {
+      "path": "/api/notify",
+      "schedule": "*/10 * * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/(.*)", "destination": "/public/$1" }
