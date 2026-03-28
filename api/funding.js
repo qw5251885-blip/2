@@ -197,27 +197,44 @@ async function fetchBitget() {
 }
 
 // ══ MEXC ══════════════════════════════════════════════
+// 改用批量 ticker 端點（一次拿全部），速度快 100 倍
 async function fetchMEXC() {
-  const j = await get('https://api.mexc.com/api/v1/contract/detail');
-  if (!j.success) throw new Error('MEXC list error');
-  const symbols = (j.data||[]).filter(d=>d.symbol.endsWith('_USDT')).map(d=>d.symbol);
-  const results=[];
-  for (let i=0; i<Math.min(symbols.length,100); i+=20) {
-    const batch=symbols.slice(i,i+20);
-    const fetched=await Promise.allSettled(batch.map(sym=>
-      Promise.all([
-        get(`https://api.mexc.com/api/v1/contract/funding_rate/${sym}`),
-        get(`https://api.mexc.com/api/v1/contract/ticker?symbol=${sym}`).catch(()=>null),
-      ])
-    ));
-    for (const f of fetched) {
-      if (f.status!=='fulfilled') continue;
-      const [fr,tk]=f.value;
-      if (fr?.success&&fr.data) results.push({
-        symbol:fr.data.symbol.replace('_USDT',''), rate:parseFloat(fr.data.fundingRate),
-        lastPrice:tk?.success&&tk.data?parseFloat(tk.data.lastPrice)||null:null,
-        nextFunding:fr.data.nextSettleTime||null,
-      });
+  const tk = await get('https://api.mexc.com/api/v1/contract/ticker');
+  if (!tk.success) throw new Error('MEXC ticker error');
+  const tickerMap = {};
+  for (const t of (tk.data || [])) {
+    if (t.symbol && t.symbol.endsWith('_USDT')) tickerMap[t.symbol] = t;
+  }
+  const symbols = Object.keys(tickerMap);
+  if (!symbols.length) throw new Error('MEXC no symbols');
+
+  const results = [];
+  const B = 25;
+  for (let i = 0; i < Math.min(symbols.length, 100); i += B) {
+    const batch = symbols.slice(i, i + B);
+    const fetched = await Promise.allSettled(
+      batch.map(sym => get('https://api.mexc.com/api/v1/contract/funding_rate/' + sym))
+    );
+    for (let k = 0; k < batch.length; k++) {
+      const sym = batch[k];
+      const fr  = fetched[k];
+      const t   = tickerMap[sym];
+      if (fr.status === 'fulfilled' && fr.value && fr.value.success && fr.value.data) {
+        const d = fr.value.data;
+        results.push({
+          symbol:      sym.replace('_USDT', ''),
+          rate:        parseFloat(d.fundingRate),
+          lastPrice:   t ? parseFloat(t.lastPrice) || null : null,
+          nextFunding: d.nextSettleTime || null,
+        });
+      } else if (t && t.fundingRate != null) {
+        results.push({
+          symbol:      sym.replace('_USDT', ''),
+          rate:        parseFloat(t.fundingRate),
+          lastPrice:   parseFloat(t.lastPrice) || null,
+          nextFunding: null,
+        });
+      }
     }
   }
   return results;
