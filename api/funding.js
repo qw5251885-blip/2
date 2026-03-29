@@ -60,8 +60,20 @@ export default async function handler(req, res) {
       }
       priceDiffPct = (hi-lo)/lo;
     }
+    // 價格對齊檢查：理想情況是「費率高的那邊價格也高」（做空收高費率 + 賣高價）
+    // priceAligned = true 表示做空交易所價格 >= 做多交易所價格（正確方向）
+    const shortPrice = prices[maxEx];
+    const longPrice  = prices[minEx];
+    const priceAligned = (shortPrice && longPrice) ? shortPrice >= longPrice : null;
+    const priceSuggest = priceAligned === false
+      ? 'warn'   // 做空方反而價格較低，需注意
+      : priceAligned === true
+      ? 'good'   // 做空方價格較高，方向正確
+      : null;
+
     return { ...row, spread, netSpread, maxEx, minEx, maxRate, minRate,
-             totalFee, prices, priceDiffPct, priceMaxEx, priceMinEx };
+             totalFee, prices, priceDiffPct, priceMaxEx, priceMinEx,
+             priceAligned, priceSuggest, shortPrice, longPrice };
   }).filter(r=>r&&r.spread>0).sort((a,b)=>b.netSpread-a.netSpread);
 
   const exchangeStatus = {};
@@ -124,8 +136,26 @@ async function fetchBinance() {
     for (const t of tkData) lastMap[t.symbol] = parseFloat(t.price);
   } catch {}
 
+  // 同時抓 24h 成交量，過濾掉已下架（成交量為 0）的合約
+  let volMap = {};
+  try {
+    const volData = await tryUrls([
+      'https://fapi.binance.com/fapi/v1/ticker/24hr',
+      'https://fapi1.binance.com/fapi/v1/ticker/24hr',
+    ], j => Array.isArray(j));
+    for (const t of volData) volMap[t.symbol] = parseFloat(t.quoteVolume||0);
+  } catch {}
+
   return piData
-    .filter(d => d.symbol.endsWith('USDT') && d.lastFundingRate != null)
+    .filter(d => {
+      if (!d.symbol.endsWith('USDT')) return false;
+      if (d.lastFundingRate == null) return false;
+      // 過濾費率為 0 且成交量極低的幣（已下架合約）
+      const rate = parseFloat(d.lastFundingRate);
+      const vol  = volMap[d.symbol] || 0;
+      if (rate === 0 && vol < 10000) return false;
+      return true;
+    })
     .map(d => ({
       symbol:      d.symbol.replace('USDT',''),
       rate:        parseFloat(d.lastFundingRate),
