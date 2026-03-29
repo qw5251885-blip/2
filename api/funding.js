@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET');
   res.setHeader('Cache-Control', 's-maxage=25, stale-while-revalidate=10');
 
-  const [binanceRes, bybitRes, okxRes, bitgetRes, mexcRes, kucoinRes] =
+  const [binanceRes, bybitRes, okxRes, bitgetRes, mexcRes, kucoinRes, gateRes, bingxRes] =
     await Promise.allSettled([
       fetchBinance(),
       fetchBybit(),
@@ -16,6 +16,8 @@ export default async function handler(req, res) {
       fetchBitget(),
       fetchMEXC(),
       fetchKuCoin(),
+      fetchGate(),
+      fetchBingX(),
     ]);
 
   const merged = {};
@@ -32,9 +34,10 @@ export default async function handler(req, res) {
   mergeIn(binanceRes,'binance'); mergeIn(bybitRes,'bybit');
   mergeIn(okxRes,'okx');         mergeIn(bitgetRes,'bitget');
   mergeIn(mexcRes,'mexc');       mergeIn(kucoinRes,'kucoin');
+  mergeIn(gateRes,'gate');       mergeIn(bingxRes,'bingx');
 
-  const FEES = { binance:.0005, bybit:.0006, okx:.0005, bitget:.0006, mexc:.0002, kucoin:.0006 };
-  const EXS  = ['binance','bybit','okx','bitget','mexc','kucoin'];
+  const FEES = { binance:.0005, bybit:.0006, okx:.0005, bitget:.0006, mexc:.0002, kucoin:.0006, gate:.0005, bingx:.0005 };
+  const EXS  = ['binance','bybit','okx','bitget','mexc','kucoin','gate','bingx'];
 
   const result = Object.values(merged).map(row => {
     const avail = EXS.filter(e => row[e] !== undefined);
@@ -77,7 +80,7 @@ export default async function handler(req, res) {
   }).filter(r=>r&&r.spread>0).sort((a,b)=>b.netSpread-a.netSpread);
 
   const exchangeStatus = {};
-  const resMap = { binance:binanceRes,bybit:bybitRes,okx:okxRes,bitget:bitgetRes,mexc:mexcRes,kucoin:kucoinRes };
+  const resMap = { binance:binanceRes,bybit:bybitRes,okx:okxRes,bitget:bitgetRes,mexc:mexcRes,kucoin:kucoinRes,gate:gateRes,bingx:bingxRes };
   for (const [e,r] of Object.entries(resMap))
     exchangeStatus[e] = r.status==='fulfilled' ? 'ok' : (r.reason?.message||'error');
 
@@ -285,4 +288,35 @@ async function fetchKuCoin() {
     lastPrice:parseFloat(d.lastTradePrice)||null,
     nextFunding:d.nextFundingRateTime||null,
   }));
+}
+
+// ══ Gate.io ═══════════════════════════════════════════
+// Gate.io 永續合約資金費率：一次拿全部，不需要 API Key
+async function fetchGate() {
+  // tickers 一次拿全部幣種（含費率和最新價）
+  const j = await get('https://api.gateio.ws/api/v4/futures/usdt/tickers');
+  if (!Array.isArray(j)) throw new Error('Gate.io: invalid response');
+  return j
+    .filter(d => d.contract && d.contract.endsWith('_USDT') && d.funding_rate != null)
+    .map(d => ({
+      symbol:      d.contract.replace('_USDT', ''),
+      rate:        parseFloat(d.funding_rate),
+      lastPrice:   parseFloat(d.last) || null,
+      nextFunding: d.funding_next_apply ? parseInt(d.funding_next_apply) * 1000 : null,
+    }));
+}
+
+// ══ BingX ════════════════════════════════════════════
+// BingX 永續合約資金費率：公開 API 不需要 Key
+async function fetchBingX() {
+  const j = await get('https://open-api.bingx.com/openApi/swap/v2/quote/premiumIndex');
+  if (!j?.data) throw new Error('BingX: invalid response');
+  return (j.data || [])
+    .filter(d => d.symbol && d.symbol.endsWith('-USDT') && d.lastFundingRate != null)
+    .map(d => ({
+      symbol:      d.symbol.replace('-USDT', ''),
+      rate:        parseFloat(d.lastFundingRate),
+      lastPrice:   parseFloat(d.markPrice) || null,
+      nextFunding: d.nextFundingTime ? parseInt(d.nextFundingTime) : null,
+    }));
 }
