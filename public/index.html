@@ -1631,127 +1631,6 @@
         </div>
     </div>
 
-    <!-- Telegram 通知設定 -->
-    <div class="tg-section">
-        <button class="sec-btn" id="tb-tg" onclick="toggle('tg')">
-            <span>🤖 Telegram 套利通知設定</span>
-            <span class="arr">▼</span>
-        </button>
-        <div class="sec-body" id="bb-tg">
-            <div class="tg-body">
-                <!-- 左側：步驟說明 -->
-                <div class="tg-steps">
-                    <div class="tg-step">
-                        <div class="tg-step-num">1</div>
-                        <div class="tg-step-text">
-
-                                        打開 Telegram，搜尋 
-                            <b>@BotFather</b>
-                             並傳送 
-                            <code>/newbot</code>
-                            <br>
-
-                                        依指示命名你的 Bot，取得 
-                            <b>Bot Token</b>
-                            （格式：
-                            <code>1234567890:ABC...</code>
-                            ）
-                                      
-                        </div>
-                    </div>
-                    <div class="tg-step">
-                        <div class="tg-step-num">2</div>
-                        <div class="tg-step-text">
-
-                                        搜尋 
-                            <b>@userinfobot</b>
-                            ，傳送任意訊息，取得你的 
-                            <b>Chat ID</b>
-                            （純數字）
-                                      
-                        </div>
-                    </div>
-                    <div class="tg-step">
-                        <div class="tg-step-num">3</div>
-                        <div class="tg-step-text">
-
-                                        進入 
-                            <b>Vercel 後台</b>
-                             → 你的專案 → 
-                            <b>Settings → Environment Variables</b>
-                            <br>
-
-                                        新增兩個變數：
-                            <br>
-                            <code>TELEGRAM_BOT_TOKEN</code>
-                             = 你的 Bot Token
-                            <br>
-                            <code>TELEGRAM_CHAT_ID</code>
-                             = 你的 Chat ID
-                                      
-                        </div>
-                    </div>
-                    <div class="tg-step">
-                        <div class="tg-step-num">4</div>
-                        <div class="tg-step-text">
-
-                                        儲存後到 Vercel 
-                            <b>Deployments</b>
-                             點 
-                            <b>Redeploy</b>
-                             讓設定生效
-                            <br>
-
-                                        之後每 
-                            <b>10 分鐘</b>
-                            自動檢查一次，有機會就通知你 📱
-                                      
-                        </div>
-                    </div>
-
-                    <!-- 通知門檻設定 -->
-                    <div style="background:var(--bg3);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:10px;">
-                        <div style="font-size:10px;color:var(--dim);font-family:var(--mono);letter-spacing:1px;margin-bottom:8px;">
-                                    📊 通知門檻設定（目前固定在 Vercel 環境變數）
-                                  </div>
-                        <div class="tg-threshold">
-                            <span class="tg-threshold-lbl">NOTIFY_THRESHOLD =</span>
-                            <input class="tg-threshold-inp" type="number" value="1" min="0.1" max="10" step="0.1" id="tg-threshold-val" oninput="updateTgThreshold()"/>
-                            <span style="font-size:11px;color:var(--dim);font-family:var(--mono)">（年化倍數，1 = 100%，0.5 = 50%）</span>
-                        </div>
-                        <div style="font-size:10px;color:var(--mute);font-family:var(--mono);margin-top:6px" id="tg-threshold-hint">
-                                    目前設定：年化 ≥ 100% 才通知
-                                  </div>
-                    </div>
-
-                    <!-- 測試按鈕 -->
-                    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-                        <button class="tg-btn" onclick="testNotify()">📨 測試發送通知</button>
-                        <div style="font-size:10px;color:var(--dim);font-family:var(--mono);align-self:center" id="tg-test-result"></div>
-                    </div>
-                </div>
-
-                <!-- 右側：QR Code -->
-                <div class="tg-qr">
-                    <div class="tg-qr-box" id="tg-qr-container">
-                        <div id="tg-qr-inner" style="display:flex;flex-direction:column;align-items:center;gap:4px">
-                            <div style="font-size:20px">🤖</div>
-                            <div style="font-size:9px;color:var(--mute);text-align:center">
-                                輸入 Bot Username
-                                <br>
-                                產生 QR Code
-                            </div>
-                        </div>
-                    </div>
-                    <input id="tg-username" type="text" placeholder="@YourBotName" style="width:120px;background:var(--bg3);border:1px solid var(--bd2);color:#fff;
-                                border-radius:5px;padding:5px 8px;font-family:var(--mono);font-size:10px;
-                                outline:none;text-align:center;margin-top:4px;" oninput="generateQR(this.value)"/>
-                    <span class="tg-qr-label">掃碼加好友</span>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- 篩選 -->
     <div class="filters">
         <div class="fg">
@@ -1867,6 +1746,8 @@
         visEx = new Set(EX_ALL),
         curSort = 'netSpread',
         sortAsc = false;
+    // 記憶止盈止損輸入值，key = symbol，value = {lev, buf, shortLiq, longLiq}
+    const tpslMemory = {};
     let cd = REFRESH,
         timer = null,
         loading = false;
@@ -1969,6 +1850,10 @@
             el.innerHTML = '<div class="empty">😶 無符合條件資料<br>試著降低門檻</div>';
             return;
         }
+        // 記住目前哪些卡片是展開的
+        const wasOpen = new Set(
+        [...document.querySelectorAll('.cf.open')].map(el => el.id.replace('cf-', ''))
+        );
         el.innerHTML = rows.map((row, i) => {
             const hot = i < 1 ? 'h1' : i < 2 ? 'h2' : i < 3 ? 'h3' : '';
             const sc = sColor(row.netSpread);
@@ -2018,9 +1903,38 @@
     </div>`
             ;
         }).join('');
+        // 還原展開狀態 + 重新計算止盈止損
+        rows.forEach(row => {
+            if (wasOpen.has(row.symbol)) {
+                const cf = document.getElementById('cf-' + row.symbol);
+                if (cf)
+                    cf.classList.add('open');
+            }
+            if (tpslMemory[row.symbol]?.shortLiq||tpslMemory[row.symbol]?.longLiq) {
+                setTimeout(() => calcT(row.symbol), 80);
+            }
+        });
     }
     function openCard(sym) {
         document.getElementById('cf-' + sym).classList.toggle('open');
+        // 如果有記憶的爆倉值，開啟後自動重新計算
+        if (tpslMemory[sym]?.shortLiq||tpslMemory[sym]?.longLiq) {
+            setTimeout(() => calcT(sym), 50);
+        }
+    }
+
+    // 儲存止盈止損輸入值到記憶體
+    function saveTpsl(sym) {
+        const lev=document.getElementById('lev-' + sym)?.value;
+        const buf=document.getElementById('buf-' + sym)?.value;
+        const shortLiq=document.getElementById('sl-' + sym)?.value;
+        const longLiq=document.getElementById('ll-' + sym)?.value;
+        tpslMemory[sym] = {
+            lev,
+            buf,
+            shortLiq,
+            longLiq
+        };
     }
 
     // ── 卡片展開內容 ───────────────────────────────
@@ -2180,7 +2094,10 @@
 
 
 
-        row.symbol}" type="number" value="3" min="1" max="20" oninput="calcT('${row.symbol}')"/>
+        row.symbol}" type="number"
+        value="${
+        tpslMemory['${row.symbol}']?.lev || 3}" min="1" max="20"
+        oninput="saveTpsl('${row.symbol}');calcT('${row.symbol}')"/>
       <span class="tpsl-set-unit">x</span>
     </div>
     <div class="tpsl-set-box">
@@ -2189,7 +2106,10 @@
 
 
 
-        row.symbol}" type="number" value="5" min="1" max="30" oninput="calcT('${row.symbol}')"/>
+        row.symbol}" type="number"
+        value="${
+        tpslMemory['${row.symbol}']?.buf || 5}" min="1" max="30"
+        oninput="saveTpsl('${row.symbol}');calcT('${row.symbol}')"/>
       <span class="tpsl-set-unit">%</span>
     </div>
   </div>
@@ -2213,7 +2133,10 @@
       <div class="liq-lbl">做空爆倉價 ↑（價格漲超這個就爆）</div>
       <input class="liq-inp" id="sl-${
         row.symbol}" type="number"
-        placeholder="${sp ? Math.round(sp * 1.20) : '例：70000'}" oninput="calcT('${row.symbol}')"/>
+        value="${
+        tpslMemory['${row.symbol}']?.shortLiq || ''}"
+        placeholder="${sp ? Math.round(sp * 1.20) : '例：70000'}"
+        oninput="saveTpsl('${row.symbol}');calcT('${row.symbol}')"/>
       <div class="liq-hint2">現價參考：${sp ? fP(sp) : '—'}</div>
     </div>
     <div class="liq-box">
@@ -2223,7 +2146,10 @@
       <div class="liq-lbl">做多爆倉價 ↓（價格跌破這個就爆）</div>
       <input class="liq-inp" id="ll-${
         row.symbol}" type="number"
-        placeholder="${lp ? Math.round(lp * 0.80) : '例：55000'}" oninput="calcT('${row.symbol}')"/>
+        value="${
+        tpslMemory['${row.symbol}']?.longLiq || ''}"
+        placeholder="${lp ? Math.round(lp * 0.80) : '例：55000'}"
+        oninput="saveTpsl('${row.symbol}');calcT('${row.symbol}')"/>
       <div class="liq-hint2">現價參考：${lp ? fP(lp) : '—'}</div>
     </div>
   </div>
