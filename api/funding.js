@@ -119,41 +119,46 @@ async function tryUrls(urls, validate) {
 // ══ Binance ═══════════════════════════════════════════
 // 官方有三個備用域名：fapi.binance.com / fapi1.binance.com / fapi2.binance.com
 async function fetchBinance() {
+  // 第一步：抓取「正在交易中」的合約清單（exchangeInfo），建立白名單
+  // 只有 contractStatus = "TRADING" 的才是真正可以交易的合約
+  let validSymbols = new Set();
+  try {
+    const info = await tryUrls([
+      'https://fapi.binance.com/fapi/v1/exchangeInfo',
+      'https://fapi1.binance.com/fapi/v1/exchangeInfo',
+    ], j => j?.symbols?.length > 0);
+    for (const s of info.symbols) {
+      if (s.status === 'TRADING' && s.symbol.endsWith('USDT')) {
+        validSymbols.add(s.symbol);
+      }
+    }
+  } catch {}
+
+  // 第二步：抓 premiumIndex（含費率）
   const piData = await tryUrls([
     'https://fapi.binance.com/fapi/v1/premiumIndex',
     'https://fapi1.binance.com/fapi/v1/premiumIndex',
     'https://fapi2.binance.com/fapi/v1/premiumIndex',
   ], j => Array.isArray(j) && j.length > 0);
 
-  // 同樣備用抓價格
+  // 第三步：抓最新成交價
   let lastMap = {};
   try {
     const tkData = await tryUrls([
       'https://fapi.binance.com/fapi/v2/ticker/price',
       'https://fapi1.binance.com/fapi/v2/ticker/price',
-      'https://fapi2.binance.com/fapi/v2/ticker/price',
     ], j => Array.isArray(j));
     for (const t of tkData) lastMap[t.symbol] = parseFloat(t.price);
-  } catch {}
-
-  // 同時抓 24h 成交量，過濾掉已下架（成交量為 0）的合約
-  let volMap = {};
-  try {
-    const volData = await tryUrls([
-      'https://fapi.binance.com/fapi/v1/ticker/24hr',
-      'https://fapi1.binance.com/fapi/v1/ticker/24hr',
-    ], j => Array.isArray(j));
-    for (const t of volData) volMap[t.symbol] = parseFloat(t.quoteVolume||0);
   } catch {}
 
   return piData
     .filter(d => {
       if (!d.symbol.endsWith('USDT')) return false;
       if (d.lastFundingRate == null) return false;
-      // 過濾費率為 0 且成交量極低的幣（已下架合約）
-      const rate = parseFloat(d.lastFundingRate);
-      const vol  = volMap[d.symbol] || 0;
-      if (rate === 0 && vol < 10000) return false;
+      // 核心過濾：只保留白名單裡「TRADING」狀態的合約
+      // 如果白名單抓取失敗（空的），則退回用費率 > 0 過濾
+      if (validSymbols.size > 0 && !validSymbols.has(d.symbol)) return false;
+      if (validSymbols.size === 0 && Math.abs(parseFloat(d.lastFundingRate)) < 0.000001) return false;
       return true;
     })
     .map(d => ({
