@@ -464,6 +464,18 @@
         background: rgba(38, 198, 218, .08);
     }
 
+    .ch-gate {
+        color: #e040fb;
+        border-color: rgba(224, 64, 251, .4);
+        background: rgba(224, 64, 251, .08);
+    }
+
+    .ch-bx {
+        color: #ff6e40;
+        border-color: rgba(255, 110, 64, .4);
+        background: rgba(255, 110, 64, .08);
+    }
+
     .ex-st {
         padding: 0 16px 10px;
         display: flex;
@@ -1772,6 +1784,8 @@
         <div class="chip ch-bg active" onclick="toggleEx('bitget',this)">BITGET</div>
         <div class="chip ch-m  active" onclick="toggleEx('mexc',this)">MEXC</div>
         <div class="chip ch-k  active" onclick="toggleEx('kucoin',this)">KUCOIN</div>
+        <div class="chip ch-gate active" onclick="toggleEx('gate',this)">GATE.IO</div>
+        <div class="chip ch-bx   active" onclick="toggleEx('bingx',this)">BINGX</div>
     </div>
     <div class="ex-st" id="exst"></div>
 
@@ -1797,12 +1811,14 @@
                     <th onclick="sortBy('bitget')">Bitget</th>
                     <th onclick="sortBy('mexc')">MEXC</th>
                     <th onclick="sortBy('kucoin')">KuCoin</th>
+                    <th onclick="sortBy('gate')">Gate.io</th>
+                    <th onclick="sortBy('bingx')">BingX</th>
                     <th>下次結算</th>
                 </tr>
             </thead>
             <tbody id="tbody">
                 <tr>
-                    <td colspan="11" style="text-align:center;padding:40px;color:var(--dim);font-family:var(--mono)">
+                    <td colspan="13" style="text-align:center;padding:40px;color:var(--dim);font-family:var(--mono)">
                         <span class="spinner"></span>
                          載入中...
                     </td>
@@ -1821,7 +1837,9 @@
         okx: .0005,
         bitget: .0006,
         mexc: .0002,
-        kucoin: .0006
+        kucoin: .0006,
+        gate: .0005,
+        bingx: .0005
     };
     const EXL = {
         binance: 'Binance',
@@ -1829,16 +1847,20 @@
         okx: 'OKX',
         bitget: 'Bitget',
         mexc: 'MEXC',
-        kucoin: 'KuCoin'
+        kucoin: 'KuCoin',
+        gate: 'Gate.io',
+        bingx: 'BingX'
     };
-    const EX_ALL = ['binance', 'bybit', 'okx', 'bitget', 'mexc', 'kucoin'];
+    const EX_ALL = ['binance', 'bybit', 'okx', 'bitget', 'mexc', 'kucoin', 'gate', 'bingx'];
     const EXC = {
         binance: '#f0b90b',
         bybit: '#ff8c5a',
         okx: '#29b6f6',
         bitget: '#00d09c',
         mexc: '#b39ddb',
-        kucoin: '#26c6da'
+        kucoin: '#26c6da',
+        gate: '#e040fb',
+        bingx: '#ff6e40'
     };
 
     let allData = [],
@@ -2563,7 +2585,9 @@
             okx: 'okxNext',
             bitget: 'bitgetNext',
             mexc: 'mexcNext',
-            kucoin: 'kucoinNext'
+            kucoin: 'kucoinNext',
+            gate: 'gateNext',
+            bingx: 'bingxNext'
         };
         const lines = EX_ALL.filter(e => row[e] !== undefined && row[EX_NEXT[e]]).map(e => {
             const t = fmtTime(row[EX_NEXT[e]]);
@@ -2577,7 +2601,7 @@
     }
 
     function bestNext(row) {
-        const keys = ['binanceNext', 'bybitNext', 'okxNext', 'bitgetNext', 'mexcNext', 'kucoinNext'];
+        const keys = ['binanceNext', 'bybitNext', 'okxNext', 'bitgetNext', 'mexcNext', 'kucoinNext', 'gateNext', 'bingxNext'];
         const ts = keys.map(k => row[k]).filter(Boolean);
         if (!ts.length)
             return '—';
@@ -2621,7 +2645,7 @@
     }
     function showEmpty(msg) {
         document.getElementById('cards').innerHTML = `<div class="empty">${msg}</div>`;
-        document.getElementById('tbody').innerHTML = `<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--rd);font-family:var(--mono)">${msg}</td></tr>`;
+        document.getElementById('tbody').innerHTML = `<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--rd);font-family:var(--mono)">${msg}</td></tr>`;
     }
 
     // ── Telegram 通知功能 ──────────────────────────────
